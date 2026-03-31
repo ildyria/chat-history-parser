@@ -43,7 +43,7 @@ class Message:
         role: Speaker role ('user' or 'assistant')
     """
     content: str
-    timestamp: datetime
+    timestamp: datetime | None
     role: str
     
     def __post_init__(self):

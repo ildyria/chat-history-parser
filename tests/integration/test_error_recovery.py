@@ -1,10 +1,7 @@
 """Integration tests for error recovery and partial parsing success."""
 
 import json
-from pathlib import Path
-import sys
 
-import pytest
 
 from chat_history_parser.scanner import discover_workspaces
 from chat_history_parser.parser import parse_session_file

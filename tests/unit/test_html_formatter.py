@@ -1,8 +1,6 @@
 """Unit tests for HTML formatter with Copilot-style output."""
 
-import pytest
 from datetime import datetime
-from pathlib import Path
 
 from chat_history_parser.models import ChatSession, Message
 from chat_history_parser.formatters.html_formatter import HTMLFormatter

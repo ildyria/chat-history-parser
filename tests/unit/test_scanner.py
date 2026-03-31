@@ -1,9 +1,7 @@
 """Unit tests for workspace scanner - multi-workspace discovery."""
 
 import json
-from pathlib import Path
 
-import pytest
 
 from chat_history_parser.scanner import discover_workspaces
 

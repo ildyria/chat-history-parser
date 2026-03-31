@@ -1,8 +1,6 @@
 """Contract tests for HTML output structure and format."""
 
-import pytest
 from datetime import datetime
-from pathlib import Path
 
 from chat_history_parser.models import ChatSession, Message
 from chat_history_parser.formatters.html_formatter import HTMLFormatter

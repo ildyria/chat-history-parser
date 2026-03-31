@@ -2,11 +2,9 @@
 
 import json
 from datetime import datetime
-from pathlib import Path
 
-import pytest
 
-from chat_history_parser.models import ChatSession, Message
+from chat_history_parser.models import ChatSession
 from chat_history_parser.parser import (
     parse_session_file,
     extract_user_message,

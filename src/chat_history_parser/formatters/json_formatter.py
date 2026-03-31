@@ -89,7 +89,7 @@ class JSONFormatter:
             for session in sessions
         ]
     
-    def _serialize_messages(self, messages: List[Message]) -> List[Dict[str, str]]:
+    def _serialize_messages(self, messages: List[Message]) -> List[Dict[str, str | None]]:
         """
         Serialize messages.
         

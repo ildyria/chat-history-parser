@@ -6,7 +6,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from chat_history_parser.errors import InvalidSessionFileError, ParsingError
 from chat_history_parser.models import ChatSession, Message
 
 
@@ -95,8 +94,8 @@ def parse_session_file(file_path: Path, workspace_id: str | None = None) -> Chat
             parse_errors.append(error_msg)
             print(f"Warning: {error_msg}", file=sys.stderr)
     
-    # Sort messages chronologically
-    messages.sort(key=lambda m: m.timestamp)
+    # Sort messages chronologically; messages with no timestamp go last
+    messages.sort(key=lambda m: m.timestamp.timestamp() if m.timestamp else float('inf'))
     
     return ChatSession(
         session_id=session_id,
@@ -175,7 +174,7 @@ def extract_assistant_messages(request: dict) -> list[Message]:
     return flatten_response(response_array, timestamp_str)
 
 
-def flatten_response(response_array: list, timestamp: str) -> list[Message]:
+def flatten_response(response_array: list, timestamp: str | None) -> list[Message]:
     """Flatten heterogeneous response array into readable text messages.
 
     Handles different response types (via 'type' field) and kinds (via 'kind' field):

@@ -1,7 +1,6 @@
 """HTML output formatter with TailwindCSS styling."""
 
 from datetime import datetime
-from pathlib import Path
 
 from chat_history_parser.models import ChatSession, Message
 
@@ -329,7 +328,7 @@ class HTMLFormatter:
         Returns:
             HTML for user message
         """
-        timestamp = message.timestamp.strftime("%H:%M:%S")
+        timestamp = message.timestamp.strftime("%H:%M:%S") if message.timestamp else ""
         content = self._escape_html(message.content)
         content = self._format_markdown(content)
         fallback = (username[0].upper() if username else "U")
@@ -360,7 +359,7 @@ class HTMLFormatter:
         Returns:
             HTML for assistant message
         """
-        timestamp = message.timestamp.strftime("%H:%M:%S")
+        timestamp = message.timestamp.strftime("%H:%M:%S") if message.timestamp else ""
         content = self._escape_html(message.content)
         content = self._format_markdown(content)
         fallback = (username[0].upper() if username else "A")
