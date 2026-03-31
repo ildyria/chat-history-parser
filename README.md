@@ -21,22 +21,11 @@ This tool extracts conversation history from VS Code's internal chat session sto
 
 ## Installation
 
-### Using uv (recommended)
-
 ```bash
 # Clone or download the project
 cd chat-history-parser
 
-# Create virtual environment and install
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-uv pip install -e .
-```
-
-### Using pip
-
-```bash
-pip install -e .
+uv tool install .
 ```
 
 ## Quick Start
