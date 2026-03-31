@@ -41,12 +41,13 @@ def test_parse_to_json_stdout():
 
 def test_parse_to_json_file():
     """Test parsing workspace and writing JSON to file."""
-    output_file = Path(__file__).parent.parent.parent / "test-output.json"
-    
-    # Since we now generate per-workspace filenames, the actual output will be:
-    # test-output-ChatHistoryParser.json (using workspace name from workspace.json)
-    expected_output_file = Path(__file__).parent.parent.parent / "test-output-ChatHistoryParser.json"
-    
+    project_root = Path(__file__).parent.parent.parent
+    output_file = project_root / "test-output.json"
+
+    # The CLI generates per-workspace filenames with a date suffix:
+    # test-output-ChatHistoryParser-YYYY-MM-DD.json
+    created_files = []
+
     try:
         # Run CLI with -o flag
         result = subprocess.run(
@@ -58,29 +59,33 @@ def test_parse_to_json_file():
             ],
             capture_output=True,
             text=True,
-            cwd=Path(__file__).parent.parent.parent,
+            cwd=project_root,
             env={"PYTHONPATH": "src"}
         )
-        
+
         # Should succeed
         assert result.returncode == 0, f"Failed: {result.stderr}"
-        
-        # File should exist with workspace-specific name
-        assert expected_output_file.exists(), f"Output file not created at {expected_output_file}"
-        
+
+        # Find the generated file (name includes workspace name and date)
+        created_files = list(project_root.glob("test-output-ChatHistoryParser*.json"))
+        assert created_files, f"No output file created matching test-output-ChatHistoryParser*.json; stderr: {result.stderr}"
+
+        expected_output_file = created_files[0]
+
         # Should be valid JSON
         with open(expected_output_file) as f:
             data = json.load(f)
-        
+
         # Check structure
         assert "metadata" in data
         assert "sessions" in data
         assert data["metadata"]["session_count"] > 0
-        
+
     finally:
         # Cleanup
-        if expected_output_file.exists():
-            expected_output_file.unlink()
+        for f in created_files:
+            if f.exists():
+                f.unlink()
 
 
 def test_json_output_piping():
