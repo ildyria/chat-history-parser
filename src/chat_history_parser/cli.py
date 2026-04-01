@@ -16,12 +16,12 @@ from chat_history_parser.errors import WorkspaceNotFoundError, InvalidSessionFil
 
 def get_default_workspace_storage_path() -> Path | None:
     """Get the default VS Code workspaceStorage path based on the operating system.
-    
+
     Returns:
         Path to the default workspaceStorage directory, or None if it cannot be determined.
     """
     system = platform.system()
-    
+
     if system == "Windows":
         # Windows: %APPDATA%\Code\User\workspaceStorage
         appdata = Path.home() / "AppData" / "Roaming"
@@ -32,7 +32,19 @@ def get_default_workspace_storage_path() -> Path | None:
     elif system == "Linux":
         # Linux: $HOME/.config/Code/User/workspaceStorage
         return Path.home() / ".config" / "Code" / "User" / "workspaceStorage"
-    
+
+    return None
+
+
+def get_fallback_workspace_storage_path() -> Path | None:
+    """Get the fallback VS Code workspaceStorage path (e.g. for remote/SSH environments).
+
+    Returns:
+        Path to the fallback workspaceStorage directory, or None if not on Linux.
+    """
+    if platform.system() == "Linux":
+        # VS Code Server (remote/SSH): $HOME/.vscode-server/data/User/workspaceStorage
+        return Path.home() / ".vscode-server" / "data" / "User" / "workspaceStorage"
     return None
 
 
@@ -55,7 +67,7 @@ Examples:
   %(prog)s -p "ProjectName" -o output.html    # Filter by project name
   %(prog)s --format json | jq '.metadata'     # Pipe JSON to jq
 
-For more information, see: https://github.com/your-repo/chat-history-parser
+For more information, see: https://github.com/ildyria/chat-history-parser
         """,
     )
     
@@ -277,9 +289,13 @@ def main():
             sys.exit(2)
         workspace_path = default_path
         if not workspace_path.exists():
-            print(f"Error: Default VS Code workspaceStorage path not found: {workspace_path}", file=sys.stderr)
-            print("Please provide a path explicitly: chat-history-parser /path/to/workspaceStorage", file=sys.stderr)
-            sys.exit(1)
+            fallback_path = get_fallback_workspace_storage_path()
+            if fallback_path is not None and fallback_path.exists():
+                workspace_path = fallback_path
+            else:
+                print(f"Error: Default VS Code workspaceStorage path not found: {workspace_path}", file=sys.stderr)
+                print("Please provide a path explicitly: chat-history-parser /path/to/workspaceStorage", file=sys.stderr)
+                sys.exit(1)
     
     try:
         # Discover workspaces
