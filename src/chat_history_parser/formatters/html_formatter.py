@@ -386,7 +386,8 @@ class HTMLFormatter:
 
     def _file_chip(self, filename: str) -> str:
         """Render a filename as a small inline badge."""
-        name = filename.rstrip('/').rsplit('/', 1)[-1]
+        # Handle both forward-slash and backslash paths
+        name = filename.rstrip('/\\').replace('\\', '/').rsplit('/', 1)[-1]
         return (
             f'<span class="vsc-file-chip inline-flex items-center gap-1 px-2 py-0.5 rounded '
             f'text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">'
@@ -545,9 +546,12 @@ class HTMLFormatter:
         def style_pre(m: re.Match) -> str:
             lang_attr = m.group(1)
             code_body = m.group(2)
+            # Always emit <code> with at least one attribute so it won't match
+            # the bare <code> inline-code replacement below.
+            code_tag = f'<code class="vsc-block-code"{lang_attr}>' if not lang_attr else f'<code{lang_attr}>'
             return (
                 f'<pre class="vsc-code-block bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto my-2 text-sm">'
-                f'<code{lang_attr}>{code_body}</code></pre>'
+                f'{code_tag}{code_body}</code></pre>'
                 f'<button class="code-toggle" onclick="toggleCode(this)">Show more ▼</button>'
             )
 
@@ -558,10 +562,10 @@ class HTMLFormatter:
             flags=re.DOTALL,
         )
 
-        # Inline code
+        # Inline code — only bare <code> (no attributes), so block code is not affected
         html = re.sub(
             r'<code>',
-            '<code class="vsc-inline-code bg-gray-200 px-1 rounded text-sm">',
+            '<code class="vsc-inline-code bg-gray-200 dark:bg-gray-700 px-1 rounded text-sm">',
             html,
         )
 
