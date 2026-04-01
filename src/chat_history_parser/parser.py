@@ -225,8 +225,14 @@ def flatten_response(response_array: list, timestamp: str | None) -> list[Messag
 
         elif response_type == "confirmation":
             title = item.get("title", "")
-            message_text = item.get("message", "")
-            content = f"[Confirmation: {title}]\n{message_text}"
+            message_obj = item.get("message", "")
+            if isinstance(message_obj, dict):
+                message_text = message_obj.get("value", "")
+            else:
+                message_text = message_obj or ""
+            # Strip markdown links like [label](command:...) — keep just the label
+            message_text = re.sub(r'\[([^\]]+)\]\([^)]*\)', r'\1', message_text)
+            content = f"[Confirmation: {title}]\n{message_text}" if message_text else f"[Confirmation: {title}]"
 
         elif response_type == "textEditGroup":
             content = _format_text_edit_group(item)
@@ -262,6 +268,16 @@ def flatten_response(response_array: list, timestamp: str | None) -> list[Messag
                 # invocationMessage may be a dict with a 'value' key
                 if isinstance(raw_msg, dict):
                     raw_msg = raw_msg.get("value", "")
+                # For terminal tool invocations, append the command line
+                tool_data = item.get("toolSpecificData", {})
+                if isinstance(tool_data, dict) and tool_data.get("kind") == "terminal":
+                    cmd = tool_data.get("commandLine", {})
+                    if isinstance(cmd, dict):
+                        cmd_str = cmd.get("original") or cmd.get("value") or ""
+                    else:
+                        cmd_str = str(cmd) if cmd else ""
+                    if cmd_str:
+                        raw_msg = f"{raw_msg}: {cmd_str}" if raw_msg else cmd_str
                 content = f"[Tool: {raw_msg}]" if raw_msg else None
 
         elif "value" in item:

@@ -36,17 +36,6 @@ def get_default_workspace_storage_path() -> Path | None:
     return None
 
 
-def get_fallback_workspace_storage_path() -> Path | None:
-    """Get the fallback VS Code workspaceStorage path (e.g. for remote/SSH environments).
-
-    Returns:
-        Path to the fallback workspaceStorage directory, or None if not on Linux.
-    """
-    if platform.system() == "Linux":
-        # VS Code Server (remote/SSH): $HOME/.vscode-server/data/User/workspaceStorage
-        return Path.home() / ".vscode-server" / "data" / "User" / "workspaceStorage"
-    return None
-
 
 def create_parser() -> argparse.ArgumentParser:
     """Create and configure the argument parser.
@@ -124,7 +113,7 @@ For more information, see: https://github.com/ildyria/chat-history-parser
         type=str,
         metavar="PATH",
         dest="filter_path",
-        help="Filter to workspaces matching this folder path (e.g., 'LycheeOrg' or '/home/user/Projects/LycheeOrg')",
+        help="Filter to workspaces matching this folder path (e.g., 'myproject' or '/home/user/myproject')",
     )
     
     # List workspaces
@@ -157,9 +146,9 @@ def generate_output_filename(
 
     Creates workspace-specific filenames based on the -o argument:
     - No -o specified: Returns None (stdout mode)
-    - -o output.html: Creates output-LycheeOrg.html, output-OtherProject.html
-    - -o output: Creates output-LycheeOrg.html, output-OtherProject.html
-    - -o output_dir/ (directory): Creates output_dir/LycheeOrg.html, output_dir/OtherProject.html
+    - -o output.html: Creates output-myproject.html, output-OtherProject.html
+    - -o output: Creates output-myproject.html, output-OtherProject.html
+    - -o output_dir/ (directory): Creates output_dir/myproject.html, output_dir/OtherProject.html
 
     Args:
         base_output: User-specified output path from -o flag (or None for stdout)
@@ -289,13 +278,9 @@ def main():
             sys.exit(2)
         workspace_path = default_path
         if not workspace_path.exists():
-            fallback_path = get_fallback_workspace_storage_path()
-            if fallback_path is not None and fallback_path.exists():
-                workspace_path = fallback_path
-            else:
-                print(f"Error: Default VS Code workspaceStorage path not found: {workspace_path}", file=sys.stderr)
-                print("Please provide a path explicitly: chat-history-parser /path/to/workspaceStorage", file=sys.stderr)
-                sys.exit(1)
+            print(f"Error: Default VS Code workspaceStorage path not found: {workspace_path}", file=sys.stderr)
+            print("Please provide a path explicitly: chat-history-parser /path/to/workspaceStorage", file=sys.stderr)
+            sys.exit(1)
     
     try:
         # Discover workspaces
@@ -326,7 +311,7 @@ def main():
             for ws in workspaces:
                 if ws.workspace_name:
                     # Match against the full folder path from workspace.json
-                    # Supports both partial matches (e.g., "LycheeOrg") and full paths
+                    # Supports both partial matches (e.g., "myproject") and full paths
                     if search_path in ws.workspace_name.lower():
                         filtered.append(ws)
             

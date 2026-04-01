@@ -87,7 +87,9 @@ def extract_workspace_name(workspace_path: Path) -> str | None:
     """Extract workspace name from workspace.json file.
     
     Reads workspace.json and extracts the full folder path from the 'folder' field.
-    Example: {"folder": "file:///home/biv/Documents/Projects/LycheeOrg"} -> "/home/biv/Documents/Projects/LycheeOrg"
+    Supports file:// and vscode-remote:// URI schemes.
+    Example: {"folder": "file:///home/user/myproject"} -> "/home/user/myproject"
+    Example: {"folder": "vscode-remote://wsl%2Bdebian/home/benoit/resc/frontend"} -> "/home/benoit/resc/frontend"
     
     Args:
         workspace_path: Path to workspace directory
@@ -109,11 +111,18 @@ def extract_workspace_name(workspace_path: Path) -> str | None:
             return None
         
         # Extract full folder path from file:// URI
-        # Example: "file:///home/biv/Documents/Projects/LycheeOrg" -> "/home/biv/Documents/Projects/LycheeOrg"
+        # Example: "file:///home/user/myproject" -> "/home/user/myproject"
         if folder_uri.startswith('file://'):
             folder_path = folder_uri[7:]  # Remove 'file://' prefix
             return folder_path
-        
+
+        # Extract path from vscode-remote:// URI (WSL, SSH, etc.)
+        # Example: "vscode-remote://wsl%2Bdebian/home/benoit/resc/frontend" -> "/home/benoit/resc/frontend"
+        if folder_uri.startswith('vscode-remote://'):
+            from urllib.parse import urlparse, unquote
+            parsed = urlparse(folder_uri)
+            return unquote(parsed.path)
+
         return None
     
     except (json.JSONDecodeError, OSError, KeyError):

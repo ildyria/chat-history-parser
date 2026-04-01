@@ -256,8 +256,13 @@ class HTMLFormatter:
                     username=session.requester_username,
                 ))
             elif message.role == "assistant":
-                if self._detect_message_type(message) == "action":
+                msg_type = self._detect_message_type(message)
+                if msg_type == "skip":
+                    continue
+                elif msg_type == "action":
                     parts.append(self._render_action_note(message))
+                elif msg_type == "confirmation":
+                    parts.append(self._render_confirmation(message))
                 else:
                     parts.append(self._render_assistant_message(
                         message,
@@ -406,12 +411,34 @@ class HTMLFormatter:
         content = re.sub(r'\[\]\(([^)]+)\)', lambda m: self._file_chip(m.group(1)), content)
         return f'        <div class="pl-11 py-0.5 text-xs text-gray-400 italic">⚙ {content}</div>'
 
+    def _render_confirmation(self, message: Message) -> str:
+        """Render a confirmation/continue prompt as a distinct amber callout."""
+        import re
+        content = message.content.strip()
+        # Extract title and body from [Confirmation: title]\nbody
+        m = re.match(r'^\[Confirmation:\s*(.*?)\]\s*\n?(.*)', content, re.DOTALL)
+        if m:
+            title = self._escape_html(m.group(1).strip())
+            body = self._escape_html(m.group(2).strip())
+        else:
+            title = self._escape_html(content.lstrip('[').split(']')[0].replace('Confirmation:', '').strip())
+            body = ""
+        body_html = f'<p class="text-sm text-amber-700 mt-1">{body}</p>' if body else ""
+        return (
+            f'        <div class="pl-11 py-2">'
+            f'<div class="inline-block rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800">'
+            f'<span class="font-semibold">❓ {title}</span>'
+            f'{body_html}'
+            f'</div></div>'
+        )
+
     def _shorten_paths(self, text: str) -> str:
         """Replace absolute file paths with just the filename.
 
         Handles:
         - Plain paths: /home/user/.../File.php
         - file:// URIs: file:///home/user/.../File.php (with optional #fragment)
+        - Backslash paths: \\home\\user\\...\\File.go (Windows/WSL paths in JSON)
         """
         import re
 
@@ -423,10 +450,15 @@ class HTMLFormatter:
         def basename_from_path(m: re.Match) -> str:
             return m.group(0).rsplit('/', 1)[-1]
 
+        def basename_from_backslash_path(m: re.Match) -> str:
+            return m.group(0).rsplit('\\', 1)[-1]
+
         # file:// URIs (consume optional #fragment so it doesn't leak)
         text = re.sub(r'file://[^\s)\]#,]+(#[^\s)\]]*)?', basename_from_uri, text)
         # Bare absolute paths: must contain at least one / separator after root
         text = re.sub(r'/(?:[^\s,\[\]()\'"]+/)+[^\s,\[\]()\'"#/]+', basename_from_path, text)
+        # Backslash paths: \\seg\\seg\\...\\filename (at least two segments)
+        text = re.sub(r'\\(?:[^\s,\[\]()\'"\\]+\\)+[^\s,\[\]()\'"\\]+', basename_from_backslash_path, text)
         return text
     
     def _detect_message_type(self, message: Message) -> str:
@@ -442,9 +474,15 @@ class HTMLFormatter:
         # Using `in` would misclassify real text that has a [File: ...] reference appended.
         content_lower = message.content.strip().lower()
 
-        if content_lower.startswith(('[tool:', '[thinking]', '[confirmation:', '[action:', '[editing:', '[referencing:')):
+        if content_lower.startswith(('[tool:', '[thinking]', '[action:', '[editing:', '[referencing:')):
             return "action"
-        
+
+        if content_lower.startswith('[confirmation:'):
+            return "confirmation"
+
+        if content_lower.startswith('[mcpservers'):
+            return "skip"
+
         return "text"
     
     def _render_parse_errors(self, errors: list[str]) -> str:

@@ -188,7 +188,7 @@ chat-history ~/workspaceStorage -w ff0a29140064c53adb63a0d2383e841c -o output.ht
 
 **Behavior**:
 - Matches against the `folder` field in each workspace's `workspace.json` file
-- Supports both full paths (e.g., `/home/user/Projects/LycheeOrg`) and partial names (e.g., `LycheeOrg`)
+- Supports both full paths (e.g., `/home/user/myproject`) and partial names (e.g., `myproject`)
 - Case-insensitive substring matching
 - Processes all workspaces that match the search string
 - Exits with error code 1 if no matching workspaces found
@@ -197,16 +197,16 @@ chat-history ~/workspaceStorage -w ff0a29140064c53adb63a0d2383e841c -o output.ht
 **Examples**:
 ```bash
 # Filter by project name (partial match)
-chat-history ~/workspaceStorage --workspace-path "LycheeOrg" -o output.html
+chat-history ~/workspaceStorage --workspace-path "myproject" -o output.html
 
 # Filter by full path
-chat-history ~/workspaceStorage -p "/home/user/Projects/LycheeOrg" -o output.html
+chat-history ~/workspaceStorage -p "/home/user/myproject" -o output.html
 
 # Case-insensitive matching
 chat-history ~/workspaceStorage -p "lychee" -o output.html
 ```
 
-**Note**: The workspace path filtering uses the folder path from workspace.json with the `file://` prefix removed. For example, `{"folder": "file:///home/user/Projects/LycheeOrg"}` becomes `/home/user/Projects/LycheeOrg` for matching purposes.
+**Note**: The workspace path filtering uses the folder path from workspace.json with the `file://` prefix removed. For example, `{"folder": "file:///home/user/myproject"}` becomes `/home/user/myproject` for matching purposes.
 
 ---
 
@@ -238,9 +238,9 @@ Found 3 workspace(s):
 
 Workspace ID                       Sessions   Project Path
 ----------------------------------------------------------------------------------------------------
-ff0a29140064c53adb63a0d2383e841c   42         /home/user/Documents/Projects/LycheeOrg
-abc123def456789012345678901234ab   8          /home/user/Projects/ChatHistoryParser
-def456abc789012345678901234567cd   15         /home/user/Documents/Projects/AnotherProject
+ff0a29140064c53adb63a0d2383e841c   42         /home/user/myproject
+abc123def456789012345678901234ab   8          /home/user/ChatHistoryParser
+def456abc789012345678901234567cd   15         /home/user/AnotherProject
 ```
 
 ---
@@ -624,7 +624,7 @@ chat-history -o output.html
 chat-history --format json
 
 # Parse default location with specific project filter
-chat-history -p "LycheeOrg" -o output.html
+chat-history -p "myproject" -o output.html
 ```
 
 ### Basic Usage with Explicit Path
@@ -644,11 +644,11 @@ chat-history ~/.config/Code/User/workspaceStorage --format json -o output.json
 chat-history -w ff0a29140064c53adb63a0d2383e841c -o output.html
 
 # Filter by project path (partial match, case-insensitive)
-chat-history -p "LycheeOrg" -o lychee.html
-chat-history -p "/home/biv/Documents/Projects/LycheeOrg" -o lychee.html
+chat-history -p "myproject" -o myproject.html
+chat-history -p "/home/user/myproject" -o myproject.html
 
 # List workspaces matching a path
-chat-history -p "Lychee" --list-workspaces
+chat-history -p "MyProject" --list-workspaces
 ```
 
 ### Advanced Options
