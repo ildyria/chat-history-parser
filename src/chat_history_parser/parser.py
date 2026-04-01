@@ -245,7 +245,7 @@ def flatten_response(response_array: list, timestamp: str | None) -> list[Messag
 
         elif response_type == "inlineReference":
             ref = item.get("inlineReference", {})
-            file_path = ref.get("fsPath") or ref.get("path") or str(uri)
+            file_path = ref.get("fsPath") or ref.get("path") or str(ref)
             inline = f" [File: {file_path}]"
             if messages:
                 messages[-1] = Message(
