@@ -2,6 +2,8 @@
 
 from datetime import datetime
 
+from markdown_it import MarkdownIt
+
 from chat_history_parser.models import ChatSession, Message
 
 
@@ -334,8 +336,7 @@ class HTMLFormatter:
             HTML for user message
         """
         timestamp = message.timestamp.strftime("%H:%M:%S") if message.timestamp else ""
-        content = self._escape_html(message.content)
-        content = self._format_markdown(content)
+        content = self._format_markdown(message.content)
         fallback = (username[0].upper() if username else "U")
         avatar = self._render_avatar(avatar_url, fallback, "bg-blue-500")
 
@@ -365,8 +366,7 @@ class HTMLFormatter:
             HTML for assistant message
         """
         timestamp = message.timestamp.strftime("%H:%M:%S") if message.timestamp else ""
-        content = self._escape_html(message.content)
-        content = self._format_markdown(content)
+        content = self._format_markdown(message.content)
         fallback = (username[0].upper() if username else "A")
         avatar = self._render_avatar(avatar_url, fallback, "bg-purple-500", icon_id=icon_id)
 
@@ -520,63 +520,69 @@ class HTMLFormatter:
                 .replace("'", '&#x27;'))
     
     def _format_markdown(self, text: str) -> str:
-        """Apply basic markdown-style formatting to text.
-        
-        Handles:
-        - Code blocks (```language ... ```)
-        - Inline code (`code`)
-        - Line breaks
-        
-        Args:
-            text: Text with markdown syntax
-            
-        Returns:
-            HTML with formatted elements
+        """Render markdown to HTML using markdown-it-py.
+
+        File chip markers and VS Code file references are substituted before
+        markdown parsing so they survive as raw HTML.
         """
-        # Handle code blocks
         import re
-        
-        def code_block(lang: str, code: str) -> str:
-            lang_class = f' class="language-{lang}"' if lang else ''
+
+        # --- pre-processing: replace file/path markers with HTML chips ---
+        # These markers contain paths that must not be touched by the markdown parser.
+        file_chip = self._file_chip
+
+        text = re.sub(r'\[File: ([^\]]+)\]', lambda m: file_chip(m.group(1)), text)
+        text = re.sub(r'\[File Edit: ([^\]]+)\]', lambda m: file_chip(m.group(1)), text)
+        text = re.sub(r'\[\]\(([^)]+)\)', lambda m: file_chip(m.group(1)), text)
+        text = re.sub(r'#file:(\S+)', lambda m: file_chip(m.group(1)), text)
+
+        # --- markdown rendering ---
+        md = MarkdownIt("commonmark", {"html": True})
+        html = md.render(text)
+
+        # --- post-processing: style elements to match Tailwind design ---
+        # Code blocks: add language class and collapse toggle
+        def style_pre(m: re.Match) -> str:
+            lang_attr = m.group(1)
+            code_body = m.group(2)
             return (
-                f'<pre><code{lang_class}>{code}</code></pre>'
+                f'<pre class="vsc-code-block bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto my-2 text-sm">'
+                f'<code{lang_attr}>{code_body}</code></pre>'
                 f'<button class="code-toggle" onclick="toggleCode(this)">Show more ▼</button>'
             )
 
-        # Code blocks with language specifier
-        text = re.sub(
-            r'```(\w+)\n(.*?)\n```',
-            lambda m: code_block(m.group(1), m.group(2)),
-            text,
-            flags=re.DOTALL
+        html = re.sub(
+            r'<pre><code([^>]*)>(.*?)</code></pre>',
+            style_pre,
+            html,
+            flags=re.DOTALL,
         )
-
-        # Code blocks without language
-        text = re.sub(
-            r'```\n(.*?)\n```',
-            lambda m: code_block('', m.group(1)),
-            text,
-            flags=re.DOTALL
-        )
-        
-        file_chip = self._file_chip
-
-        # [File: /path/to/File.php] — appended inline references
-        text = re.sub(r'\[File: ([^\]]+)\]', lambda m: file_chip(m.group(1)), text)
-
-        # [File Edit: /path/to/File.php] — textEditGroup header
-        text = re.sub(r'\[File Edit: ([^\]]+)\]', lambda m: file_chip(m.group(1)), text)
-
-        # [](path/to/File.php) — empty markdown links left after URI path shortening
-        text = re.sub(r'\[\]\(([^)]+)\)', lambda m: file_chip(m.group(1)), text)
-
-        # #file:File.php — VS Code inline file references in user messages
-        text = re.sub(r'#file:(\S+)', lambda m: file_chip(m.group(1)), text)
 
         # Inline code
-        text = re.sub(r'`([^`]+)`', r'<code class="vsc-inline-code bg-gray-200 px-1 rounded">\1</code>', text)
-        
-        # Convert newlines to <br>
-        text = text.replace('\n', '<br>')
-        
-        return text
+        html = re.sub(
+            r'<code>',
+            '<code class="vsc-inline-code bg-gray-200 px-1 rounded text-sm">',
+            html,
+        )
+
+        # Headings
+        for level in range(1, 7):
+            sizes = {1: 'text-xl', 2: 'text-lg', 3: 'text-base', 4: 'text-sm', 5: 'text-sm', 6: 'text-xs'}
+            html = html.replace(f'<h{level}>', f'<h{level} class="font-bold {sizes[level]} mt-3 mb-1">')
+
+        # Lists
+        html = html.replace('<ul>', '<ul class="list-disc list-inside my-1 space-y-0.5">')
+        html = html.replace('<ol>', '<ol class="list-decimal list-inside my-1 space-y-0.5">')
+
+        # Blockquotes
+        html = html.replace('<blockquote>', '<blockquote class="border-l-4 border-gray-300 pl-3 italic text-gray-600 my-2">')
+
+        # Paragraphs — skip adding margin if this is a single-paragraph response
+        # (avoid double-spacing short answers)
+        if html.count('<p>') > 1:
+            html = html.replace('<p>', '<p class="my-1">')
+
+        # Links
+        html = re.sub(r'<a href="', '<a class="text-blue-600 underline" href="', html)
+
+        return html

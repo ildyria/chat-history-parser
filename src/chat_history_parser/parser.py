@@ -239,13 +239,13 @@ def flatten_response(response_array: list, timestamp: str | None) -> list[Messag
 
         elif response_type == "codeblockUri":
             uri = item.get("uri", {})
-            file_path = uri.get("fsPath") or uri.get("path") or "unknown file"
+            file_path = uri.get("fsPath") or uri.get("path") or str(uri)
             action = "Editing" if item.get("isEdit") else "Referencing"
             content = f"[{action}: {file_path}]"
 
         elif response_type == "inlineReference":
             ref = item.get("inlineReference", {})
-            file_path = ref.get("fsPath") or ref.get("path") or "unknown file"
+            file_path = ref.get("fsPath") or ref.get("path") or str(uri)
             inline = f" [File: {file_path}]"
             if messages:
                 messages[-1] = Message(
@@ -327,7 +327,7 @@ def _format_text_edit_group(item: dict) -> str:
     """
     # Extract file path from the URI object
     uri = item.get("uri", {})
-    file_path = uri.get("fsPath") or uri.get("path") or "unknown file"
+    file_path = uri.get("fsPath") or uri.get("path") or str(uri)
 
     # edits is a list of lists; each inner list has 0 or 1 edit dicts
     raw_edits = item.get("edits", [])

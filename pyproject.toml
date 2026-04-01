@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "Parse VS Code WorkspaceStorage chat session files into JSON and HTML formats"
 readme = "README.md"
 requires-python = ">=3.12"
+dependencies = [
+    "markdown-it-py>=3.0",
+]
 authors = [
     { name = "Chat History Parser Contributors" }
 ]
