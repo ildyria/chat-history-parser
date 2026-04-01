@@ -256,7 +256,7 @@ def flatten_response(response_array: list, timestamp: str | None) -> list[Messag
             last_was_inline_ref = True
             continue
 
-        elif response_type in ("prepareToolInvocation", "undoStop"):
+        elif response_type in ("prepareToolInvocation", "undoStop", "progressTaskSerialized"):
             # Internal Copilot bookkeeping — not meaningful to the reader
             content = None
 

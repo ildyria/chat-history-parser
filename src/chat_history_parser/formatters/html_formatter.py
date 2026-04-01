@@ -481,7 +481,7 @@ class HTMLFormatter:
         if content_lower.startswith('[confirmation:'):
             return "confirmation"
 
-        if content_lower.startswith('[mcpservers'):
+        if content_lower.startswith(('[mcpservers', '[progresstask')):
             return "skip"
 
         return "text"
@@ -538,7 +538,7 @@ class HTMLFormatter:
         text = re.sub(r'#file:(\S+)', lambda m: file_chip(m.group(1)), text)
 
         # --- markdown rendering ---
-        md = MarkdownIt("commonmark", {"html": True})
+        md = MarkdownIt("commonmark", {"html": True}).enable("table")
         html = md.render(text)
 
         # --- post-processing: style elements to match Tailwind design ---
@@ -585,6 +585,13 @@ class HTMLFormatter:
         # (avoid double-spacing short answers)
         if html.count('<p>') > 1:
             html = html.replace('<p>', '<p class="my-1">')
+
+        # Tables
+        html = html.replace('<table>', '<table class="border-collapse my-2 text-sm w-full">')
+        html = html.replace('<thead>', '<thead class="bg-gray-100 dark:bg-gray-700">')
+        html = html.replace('<th>', '<th class="border border-gray-300 dark:border-gray-600 px-3 py-1 text-left font-semibold">')
+        html = html.replace('<td>', '<td class="border border-gray-300 dark:border-gray-600 px-3 py-1">')
+        html = html.replace('<tr>', '<tr class="even:bg-gray-50 dark:even:bg-gray-800">')
 
         # Links
         html = re.sub(r'<a href="', '<a class="text-blue-600 underline" href="', html)
