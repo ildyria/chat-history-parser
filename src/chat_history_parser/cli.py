@@ -155,7 +155,7 @@ def generate_output_filename(
         workspace_name: Human-readable workspace name from workspace.json (or None)
         workspace_id: 32-char hex workspace ID (fallback if workspace_name is None)
         format_ext: Output format ('html' or 'json')
-        session_date: Optional date prefix (YYYY-MM-DD) for per-session filenames
+        session_date: Optional datetime prefix (YYYY-MM-DD_HH-MM-SS) for per-session filenames
         session_id: Optional session ID suffix for per-session filenames
         used_filenames: Optional set of already-used filenames for deduplication
 
@@ -399,7 +399,7 @@ def main():
                     # Get date prefix from session creation_date
                     session_date = None
                     if session.creation_date:
-                        session_date = session.creation_date.strftime("%Y-%m-%d")
+                        session_date = session.creation_date.strftime("%Y-%m-%d_%H-%M-%S")
                     
                     # Generate HTML for single session
                     output_content = generate_html_output([session], "single")
