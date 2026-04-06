@@ -4,7 +4,7 @@ Parse VS Code WorkspaceStorage chat session files into structured JSON and style
 
 ## Overview
 
-This tool extracts conversation history from VS Code's internal chat session storage (`workspaceStorage/<workspace-id>/chatSessions/*.json`) and converts it into readable formats:
+This tool extracts conversation history from VS Code's internal chat session storage (`workspaceStorage/<workspace-id>/chatSessions/*.json` and `*.jsonl`) and converts it into readable formats:
 
 - **JSON**: Structured data for programmatic analysis
 - **HTML**: Styled output with GitHub Copilot-like chat interface using TailwindCSS
@@ -13,6 +13,9 @@ This tool extracts conversation history from VS Code's internal chat session sto
 
 - 📂 Parse entire WorkspaceStorage directories
 - 💬 Extract chat messages with minimal metadata (content, timestamp, role)
+- 📄 Support both .json and .jsonl session file formats
+  - Single-line wrapped JSONL format (kind=0 with "v" wrapper)
+  - Multi-line incremental JSONL format (kind=0,1,2 event stream)
 - 🎨 Generate HTML with Copilot-style layout (user messages right, assistant left)
 - 📊 Export structured JSON for automation
 - 🛡️ Graceful error handling for corrupted files

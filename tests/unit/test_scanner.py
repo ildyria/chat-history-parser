@@ -119,3 +119,50 @@ def test_discover_nested_in_vscode_workspace_storage(tmp_path):
     ws_ids = {w.workspace_id for w in workspaces}
     assert ws1_id in ws_ids
     assert ws2_id in ws_ids
+
+
+def test_discover_jsonl_files(tmp_path):
+    """Test discovery of .jsonl files alongside .json files.
+    
+    The scanner should find both .json and .jsonl files in chatSessions directories.
+    """
+    workspace_id = "a" * 32
+    sessions_dir = tmp_path / workspace_id / "chatSessions"
+    sessions_dir.mkdir(parents=True)
+    
+    # Create a .json file
+    session_json = {
+        "version": 3,
+        "sessionId": "json-session",
+        "creationDate": "2026-03-31T10:00:00.000Z",
+        "requests": []
+    }
+    (sessions_dir / "session1.json").write_text(json.dumps(session_json))
+    
+    # Create a .jsonl file
+    session_jsonl = {
+        "kind": 0,
+        "v": {
+            "version": 3,
+            "sessionId": "jsonl-session",
+            "creationDate": 1774199840739,
+            "initialLocation": "panel",
+            "responderUsername": "GitHub Copilot",
+            "requests": [],
+            "pendingRequests": [],
+            "inputState": {}
+        }
+    }
+    (sessions_dir / "session2.jsonl").write_text(json.dumps(session_jsonl))
+    
+    # Discover workspaces
+    workspaces = discover_workspaces(tmp_path)
+    
+    # Should find one workspace with two session files
+    assert len(workspaces) == 1
+    assert len(workspaces[0].session_files) == 2
+    
+    # Verify both files are discovered
+    file_names = [f.name for f in workspaces[0].session_files]
+    assert "session1.json" in file_names
+    assert "session2.jsonl" in file_names

@@ -62,9 +62,9 @@ def discover_workspaces(base_path: Path) -> list[WorkspaceContext]:
 
 
 def find_session_files(workspace_path: Path) -> list[Path]:
-    """Find all chatSessions JSON files in a workspace directory.
+    """Find all chatSessions JSON and JSONL files in a workspace directory.
     
-    Looks for files matching the pattern: chatSessions/*.json
+    Looks for files matching the patterns: chatSessions/*.json and chatSessions/*.jsonl
     
     Args:
         workspace_path: Path to a single workspace directory
@@ -77,8 +77,10 @@ def find_session_files(workspace_path: Path) -> list[Path]:
     if not chat_sessions_dir.exists() or not chat_sessions_dir.is_dir():
         return []
     
-    # Find all JSON files in chatSessions directory
-    session_files = sorted(chat_sessions_dir.glob("*.json"))
+    # Find all JSON and JSONL files in chatSessions directory
+    json_files = list(chat_sessions_dir.glob("*.json"))
+    jsonl_files = list(chat_sessions_dir.glob("*.jsonl"))
+    session_files = sorted(json_files + jsonl_files)
     
     return session_files
 

@@ -10,15 +10,32 @@ from chat_history_parser.models import ChatSession, Message
 
 
 def parse_session_file(file_path: Path, workspace_id: str | None = None) -> ChatSession | None:
-    """Parse a chatSessions JSON file and extract conversation data.
+    """Parse a chatSessions JSON or JSONL file and extract conversation data.
     
-    Expects schema v3 with structure:
-    {
-        "version": 3,
-        "sessionId": "...",
-        "creationDate": "ISO 8601 timestamp",
-        "requests": [...]
-    }
+    Supports three formats:
+    1. Standard schema v3 (.json files):
+       {
+           "version": 3,
+           "sessionId": "...",
+           "creationDate": "ISO 8601 timestamp",
+           "requests": [...]
+       }
+    
+    2. Single-line wrapped schema (.jsonl files):
+       {
+           "kind": 0,
+           "v": {
+               "version": 3,
+               "sessionId": "...",
+               "creationDate": timestamp_ms,
+               "requests": [...]
+           }
+       }
+    
+    3. Multi-line incremental JSONL (.jsonl files with multiple lines):
+       Line 1: {"kind": 0, "v": {...}} - Initial session state
+       Line 2+: {"kind": 1, "k": ["path"], "v": value} - Field updates
+       Line 2+: {"kind": 2, "k": ["array", 0], "v": value} - Array updates
     
     Enhanced error handling (Phase 5):
     - Returns None on malformed JSON instead of raising
@@ -27,7 +44,7 @@ def parse_session_file(file_path: Path, workspace_id: str | None = None) -> Chat
     - Continues parsing even if individual requests fail
     
     Args:
-        file_path: Path to chatSessions JSON file
+        file_path: Path to chatSessions JSON or JSONL file
         workspace_id: Optional workspace identifier for multi-workspace scenarios
         
     Returns:
@@ -36,7 +53,25 @@ def parse_session_file(file_path: Path, workspace_id: str | None = None) -> Chat
     # T052: Try/except with specific error handling for JSON parsing
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+            # Try to parse as single JSON object first
+            content = f.read()
+            f.seek(0)
+            
+            # Check if it's a multi-line JSONL file (incremental updates)
+            if '\n' in content.strip():
+                lines = [line.strip() for line in content.strip().split('\n') if line.strip()]
+                if len(lines) > 1:
+                    # Try parsing first line to check if it's JSONL format
+                    try:
+                        first_line = json.loads(lines[0])
+                        if isinstance(first_line, dict) and "kind" in first_line:
+                            # This is a multi-line JSONL with incremental updates
+                            return _parse_jsonl_incremental(file_path, lines, workspace_id)
+                    except json.JSONDecodeError:
+                        pass
+            
+            # Parse as single JSON object
+            data = json.loads(content)
     except json.JSONDecodeError as e:
         # Log error and return None instead of crashing
         print(f"ERROR: Malformed JSON in {file_path}: {e}", file=sys.stderr)
@@ -48,68 +83,12 @@ def parse_session_file(file_path: Path, workspace_id: str | None = None) -> Chat
         print(f"ERROR: Unexpected error reading {file_path}: {e}", file=sys.stderr)
         return None
     
-    # T053: Defensive field access with dict.get() for optional fields
-    session_id = data.get("sessionId", "unknown")
-    requester_username = data.get("requesterUsername")
-    responder_username = data.get("responderUsername")
-    requester_avatar_url = _parse_avatar_uri(data.get("requesterAvatarIconUri"))
-    _responder_uri = data.get("responderAvatarIconUri") or {}
-    responder_avatar_url = _parse_avatar_uri(_responder_uri)
-    responder_avatar_icon_id = _responder_uri.get("id") if isinstance(_responder_uri, dict) else None
+    # Unwrap .jsonl format if present (wrapped in "kind"/"v" structure)
+    if "kind" in data and "v" in data:
+        data = data["v"]
     
-    # Check for missing required fields
-    if "version" not in data:
-        print(f"WARNING: Missing version field in {file_path}, assuming v3", file=sys.stderr)
-    
-    if session_id == "unknown":
-        print(f"WARNING: Missing sessionId in {file_path}", file=sys.stderr)
-    
-    # T054: Timestamp validation and fallback
-    creation_date_str = data.get("creationDate")
-    creation_date = None
-    
-    if creation_date_str:
-        creation_date = _parse_timestamp(creation_date_str)
-        if creation_date is None:
-            print(f"WARNING: Invalid creationDate in {file_path}", file=sys.stderr)
-    
-    # Extract messages from requests array
-    messages = []
-    parse_errors = []
-    requests = data.get("requests", [])
-    
-    for i, request in enumerate(requests):
-        try:
-            # Extract user message
-            user_msg = extract_user_message(request)
-            if user_msg:
-                messages.append(user_msg)
-            
-            # Extract assistant messages
-            assistant_msgs = extract_assistant_messages(request)
-            messages.extend(assistant_msgs)
-            
-        except Exception as e:
-            error_msg = f"Error parsing request {i}: {e}"
-            parse_errors.append(error_msg)
-            print(f"Warning: {error_msg}", file=sys.stderr)
-    
-    # Sort messages chronologically; messages with no timestamp go last
-    messages.sort(key=lambda m: m.timestamp.timestamp() if m.timestamp else float('inf'))
-    
-    return ChatSession(
-        session_id=session_id,
-        source_file=file_path,
-        messages=messages,
-        parse_errors=parse_errors,
-        creation_date=creation_date,
-        workspace_id=workspace_id,
-        requester_username=requester_username,
-        responder_username=responder_username,
-        requester_avatar_url=requester_avatar_url,
-        responder_avatar_url=responder_avatar_url,
-        responder_avatar_icon_id=responder_avatar_icon_id,
-    )
+    # Use shared parsing logic
+    return _parse_session_data(data, file_path, workspace_id)
 
 
 def extract_user_message(request: dict) -> Message | None:
@@ -350,6 +329,233 @@ def _format_text_edit_group(item: dict) -> str:
     ext = file_path.rsplit(".", 1)[-1] if "." in file_path else ""
 
     return f"[File Edit: {file_path}]\n```{ext}\n{file_content}\n```"
+
+
+def _parse_jsonl_incremental(file_path: Path, lines: list[str], workspace_id: str | None = None) -> ChatSession | None:
+    """Parse a multi-line JSONL file with incremental updates.
+    
+    JSONL format uses incremental updates:
+    - kind=0: Initial session state (full object)
+    - kind=1: Update a specific field by path (k=[path], v=value)
+    - kind=2: Append/update array values by path (k=[path], v=list_of_new_items)
+              - When k is a bare array key (e.g. k=["requests"]), v contains items
+                to APPEND to the existing array (each new turn adds one new request)
+              - When k navigates into an array element (e.g. k=["requests", 0, "response"]),
+                v replaces that sub-field on the existing element
+    
+    Args:
+        file_path: Path to the JSONL file
+        lines: List of JSON lines already read from the file
+        workspace_id: Optional workspace identifier
+        
+    Returns:
+        ChatSession object with extracted messages, or None if parsing fails
+    """
+    import copy
+    
+    # Start with empty session state
+    session_state = {}
+    
+    try:
+        for line_num, line in enumerate(lines, 1):
+            try:
+                record = json.loads(line)
+                kind = record.get("kind")
+                
+                if kind == 0:
+                    # Initial state - unwrap from "v" field
+                    if "v" in record:
+                        session_state = copy.deepcopy(record["v"])
+                    else:
+                        session_state = copy.deepcopy(record)
+                        
+                elif kind == 1:
+                    # Update single field: k=[path, to, field], v=value
+                    k = record.get("k", [])
+                    v = record.get("v")
+                    if k:
+                        _set_nested_value(session_state, k, v)
+                        
+                elif kind == 2:
+                    # Array update: semantics depend on whether path ends at an array
+                    # or navigates into an element.
+                    # k=["requests"], v=[item] → APPEND item(s) to requests list
+                    # k=["requests", 0, "response"], v=[...] → REPLACE that sub-field
+                    k = record.get("k", [])
+                    v = record.get("v")
+                    if k:
+                        _apply_kind2_update(session_state, k, v)
+                                
+            except (json.JSONDecodeError, ValueError, KeyError) as e:
+                print(f"WARNING: Skipping malformed line {line_num} in {file_path}: {e}", file=sys.stderr)
+                continue
+    
+    except Exception as e:
+        print(f"ERROR: Failed to parse JSONL incremental format in {file_path}: {e}", file=sys.stderr)
+        return None
+    
+    # Now parse the reconstructed session state
+    if not session_state:
+        print(f"ERROR: No session state reconstructed from {file_path}", file=sys.stderr)
+        return None
+    
+    # Use the existing parsing logic on the reconstructed state
+    return _parse_session_data(session_state, file_path, workspace_id)
+
+
+def _apply_kind2_update(obj: dict, path: list, value):
+    """Apply a kind=2 JSONL update.
+    
+    If path has length 1 (bare array key, e.g. ["requests"]) and value is a list,
+    the items are APPENDED to the existing array — each conversation turn adds one entry.
+    
+    If path is deeper (e.g. ["requests", 0, "response"]), the value REPLACES the
+    sub-field on the already-present element.
+    """
+    if not path:
+        return
+
+    # Bare key pointing directly at an array → append semantics
+    if len(path) == 1:
+        key = path[0]
+        if isinstance(obj, dict):
+            if key not in obj or not isinstance(obj[key], list):
+                obj[key] = []
+            if isinstance(value, list):
+                obj[key].extend(value)
+            else:
+                obj[key].append(value)
+        return
+
+    # Deeper path → replace the target sub-field
+    _set_nested_value(obj, path, value)
+
+
+def _set_nested_value(obj: dict, path: list, value):
+    """Set a value in a nested dictionary/array using a path list.
+    
+    Handles both dict keys and array indices:
+    - path=["inputState", "inputText"], value="hello" 
+      sets obj["inputState"]["inputText"] = "hello"
+    - path=["requests", 0, "response"], value=[...]
+      sets obj["requests"][0]["response"] = [...]
+    """
+    if not path:
+        return
+    
+    current = obj
+    for i, key in enumerate(path[:-1]):
+        # Check if key is an integer (array index)
+        if isinstance(key, int) or (isinstance(key, str) and key.isdigit()):
+            idx = int(key)
+            # Current should be a list
+            if not isinstance(current, list):
+                return  # Can't index into non-list
+            # Extend list if needed
+            while len(current) <= idx:
+                current.append({})
+            current = current[idx]
+        else:
+            # Dictionary key
+            if not isinstance(current, dict):
+                return  # Can't use key on non-dict
+            if key not in current:
+                # Determine if next item in path is an int (need list) or str (need dict)
+                next_key = path[i + 1] if i + 1 < len(path) else None
+                if next_key is not None and (isinstance(next_key, int) or (isinstance(next_key, str) and next_key.isdigit())):
+                    current[key] = []
+                else:
+                    current[key] = {}
+            current = current[key]
+    
+    # Set the final value
+    final_key = path[-1]
+    if isinstance(final_key, int) or (isinstance(final_key, str) and final_key.isdigit()):
+        idx = int(final_key)
+        if isinstance(current, list):
+            while len(current) <= idx:
+                current.append(None)
+            current[idx] = value
+    else:
+        if isinstance(current, dict):
+            current[final_key] = value
+
+
+def _parse_session_data(data: dict, file_path: Path, workspace_id: str | None = None) -> ChatSession | None:
+    """Parse session data dictionary into ChatSession object.
+    
+    Extracted from parse_session_file to allow reuse for JSONL incremental parsing.
+    
+    Args:
+        data: Session data dictionary
+        file_path: Path to source file
+        workspace_id: Optional workspace identifier
+        
+    Returns:
+        ChatSession object or None if parsing fails
+    """
+    # T053: Defensive field access with dict.get() for optional fields
+    session_id = data.get("sessionId", "unknown")
+    requester_username = data.get("requesterUsername")
+    responder_username = data.get("responderUsername")
+    requester_avatar_url = _parse_avatar_uri(data.get("requesterAvatarIconUri"))
+    _responder_uri = data.get("responderAvatarIconUri") or {}
+    responder_avatar_url = _parse_avatar_uri(_responder_uri)
+    responder_avatar_icon_id = _responder_uri.get("id") if isinstance(_responder_uri, dict) else None
+    
+    # Check for missing required fields
+    if "version" not in data:
+        print(f"WARNING: Missing version field in {file_path}, assuming v3", file=sys.stderr)
+    
+    if session_id == "unknown":
+        print(f"WARNING: Missing sessionId in {file_path}", file=sys.stderr)
+    
+    # T054: Timestamp validation and fallback
+    creation_date_str = data.get("creationDate")
+    creation_date = None
+    
+    if creation_date_str:
+        creation_date = _parse_timestamp(creation_date_str)
+        if creation_date is None:
+            print(f"WARNING: Invalid creationDate in {file_path}", file=sys.stderr)
+    
+    # Extract messages from requests array
+    messages = []
+    parse_errors = []
+    requests = data.get("requests", [])
+    
+    for i, request in enumerate(requests):
+        try:
+            # Extract user message
+            user_msg = extract_user_message(request)
+            if user_msg:
+                messages.append(user_msg)
+            
+            # Extract assistant messages
+            assistant_msgs = extract_assistant_messages(request)
+            messages.extend(assistant_msgs)
+            
+        except Exception as e:
+            error_msg = f"Error parsing request {i}: {e}"
+            parse_errors.append(error_msg)
+            print(f"Warning: {error_msg}", file=sys.stderr)
+    
+    # Sort messages chronologically; messages with no timestamp go last
+    messages.sort(key=lambda m: m.timestamp.timestamp() if m.timestamp else float('inf'))
+    
+    return ChatSession(
+        session_id=session_id,
+        source_file=file_path,
+        messages=messages,
+        parse_errors=parse_errors,
+        creation_date=creation_date,
+        workspace_id=workspace_id,
+        requester_username=requester_username,
+        responder_username=responder_username,
+        requester_avatar_url=requester_avatar_url,
+        responder_avatar_url=responder_avatar_url,
+        responder_avatar_icon_id=responder_avatar_icon_id,
+    )
 
 
 def _parse_timestamp(timestamp_str: str | None) -> datetime | None:
