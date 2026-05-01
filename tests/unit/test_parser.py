@@ -132,6 +132,36 @@ def test_flatten_mixed_response_types():
     assert any("print" in msg.content for msg in messages)
 
 
+def test_inline_reference_uses_name_not_raw_dict():
+    """Inline references should render a readable label, not a serialized dict."""
+    response_array = [
+        {"value": "Found it! The issue is on line 92 of "},
+        {
+            "kind": "inlineReference",
+            "name": "src/app/falcon/app/app.go#L92",
+            "inlineReference": {
+                "uri": {
+                    "path": "/home/benoit/victm/victm-darwin/src/app/falcon/app/app.go",
+                    "scheme": "vscode-remote",
+                    "authority": "wsl+Debian",
+                },
+                "range": {
+                    "startLineNumber": 92,
+                    "startColumn": 1,
+                    "endLineNumber": 92,
+                    "endColumn": 1,
+                },
+            },
+        },
+    ]
+
+    messages = flatten_response(response_array, timestamp="2026-03-31T10:00:00.000Z")
+
+    assert len(messages) == 1
+    assert "src/app/falcon/app/app.go#L92" in messages[0].content
+    assert "startLineNumber" not in messages[0].content
+
+
 # Phase 5: Error Recovery Tests (T049-T051)
 
 def test_handle_malformed_json(tmp_path):

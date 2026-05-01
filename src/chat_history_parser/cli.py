@@ -51,6 +51,7 @@ def create_parser() -> argparse.ArgumentParser:
 Examples:
   %(prog)s                                    # Use default VS Code location, output to stdout
   %(prog)s --list-workspaces                  # List all workspaces in default location
+    %(prog)s --session-file ./session.json      # Parse one chat session file directly
   %(prog)s -o output.html                     # Parse default location, save to file(s)
   %(prog)s /path/to/workspaceStorage -o out.html
   %(prog)s -p "ProjectName" -o output.html    # Filter by project name
@@ -66,6 +67,13 @@ For more information, see: https://github.com/ildyria/chat-history-parser
         type=str,
         nargs="?",
         help="Path to VS Code WorkspaceStorage directory (defaults to OS-specific VS Code location)",
+    )
+
+    parser.add_argument(
+        "-s", "--session-file",
+        type=str,
+        metavar="PATH",
+        help="Path to a single chat session file (.json or .jsonl) to parse",
     )
     
     # Output format
@@ -266,6 +274,74 @@ def main():
     """Main entry point for the CLI application."""
     parser = create_parser()
     args = parser.parse_args()
+
+    # Validate conflicting input modes/options early
+    if args.session_file and args.workspace_path:
+        print("Error: Cannot use positional workspace_path together with --session-file", file=sys.stderr)
+        sys.exit(2)
+
+    if args.session_file and args.list_workspaces:
+        print("Error: --list-workspaces cannot be used with --session-file", file=sys.stderr)
+        sys.exit(2)
+
+    if args.session_file and args.workspace:
+        print("Error: --workspace cannot be used with --session-file", file=sys.stderr)
+        sys.exit(2)
+
+    if args.session_file and args.filter_path:
+        print("Error: --workspace-path cannot be used with --session-file", file=sys.stderr)
+        sys.exit(2)
+
+    # Single-file mode: parse exactly one session file path
+    if args.session_file:
+        session_file_path = Path(args.session_file).expanduser().resolve()
+
+        if not session_file_path.exists() or not session_file_path.is_file():
+            print(f"Error: Session file not found: {session_file_path}", file=sys.stderr)
+            sys.exit(1)
+
+        try:
+            session = parse_session_file(session_file_path)
+
+            if session is None:
+                print(f"Error: Failed to parse session file: {session_file_path}", file=sys.stderr)
+                sys.exit(1)
+
+            parse_errors = [
+                ParseError(
+                    file_path=str(session_file_path),
+                    error_type="RequestParseError",
+                    message=err_msg,
+                )
+                for err_msg in session.parse_errors
+            ]
+
+            context = FormatterContext(
+                workspace_path=str(session_file_path),
+                sessions=[session],
+                parse_errors=parse_errors,
+            )
+
+            if args.format == "html":
+                output_content = generate_html_output([session], "single")
+            else:
+                output_content = generate_json_output(context)
+
+            write_output(output_content, args.output)
+
+            print("\nSummary: Processed 1 session file", file=sys.stderr)
+            if parse_errors:
+                print(f"Total parse errors: {len(parse_errors)}", file=sys.stderr)
+            print(f"Generated 1 output file(s):", file=sys.stderr)
+            print(f"  - {args.output if args.output else 'stdout'}", file=sys.stderr)
+            sys.exit(0)
+
+        except InvalidSessionFileError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as e:
+            print(f"Unexpected error: {e}", file=sys.stderr)
+            sys.exit(1)
     
     # Determine workspace path: use provided path or default VS Code location
     if args.workspace_path:

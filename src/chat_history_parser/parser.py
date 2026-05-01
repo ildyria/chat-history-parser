@@ -223,8 +223,7 @@ def flatten_response(response_array: list, timestamp: str | None) -> list[Messag
             content = f"[{action}: {file_path}]"
 
         elif response_type == "inlineReference":
-            ref = item.get("inlineReference", {})
-            file_path = ref.get("fsPath") or ref.get("path") or str(ref)
+            file_path = _extract_inline_reference_display(item)
             inline = f" [File: {file_path}]"
             if messages:
                 messages[-1] = Message(
@@ -286,6 +285,27 @@ def flatten_response(response_array: list, timestamp: str | None) -> list[Messag
         last_was_inline_ref = False
     
     return messages
+
+
+def _extract_inline_reference_display(item: dict) -> str:
+    """Extract a readable file reference label from an inlineReference item.
+
+    Prefers the top-level `name` (e.g. "src/app/file.go#L92"), then falls back
+    to URI path/fsPath inside inlineReference.uri, and finally a compact default.
+    """
+    name = item.get("name")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+
+    ref = item.get("inlineReference", {})
+    if isinstance(ref, dict):
+        uri = ref.get("uri", {})
+        if isinstance(uri, dict):
+            file_path = uri.get("fsPath") or uri.get("path")
+            if isinstance(file_path, str) and file_path.strip():
+                return file_path.strip()
+
+    return "inline-reference"
 
 
 def _format_text_edit_group(item: dict) -> str:

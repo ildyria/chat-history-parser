@@ -39,6 +39,9 @@ uv tool install .
 # Generate HTML output (default: single file to stdout)
 chat-history-parser ~/.config/Code/User/workspaceStorage/ff0a29140064c53adb63a0d2383e841c
 
+# Parse a single session file directly
+chat-history-parser --session-file tests/fixtures/sample-session-valid.json --format json
+
 # Save to file
 chat-history-parser ~/.config/Code/User/workspaceStorage/ff0a29140064c53adb63a0d2383e841c -o output.html
 
@@ -56,6 +59,7 @@ chat-history-parser ~/.config/Code/User/workspaceStorage/ --concatenate -o merge
 -o, --output PATH           Output file path (default: stdout)
 -m, --html-mode MODE        HTML output mode: single|per-session|per-workspace
 -c, --concatenate           Merge sessions chronologically
+-s, --session-file PATH     Parse one .json/.jsonl chat session file directly
 -h, --help                  Show help message
 -v, --version               Show version number
 ```
